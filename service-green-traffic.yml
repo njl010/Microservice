@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: payment-svc
+spec:
+  selector:
+    app: payment
+    env: green  # Switch traffic to Green environment
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 3000
