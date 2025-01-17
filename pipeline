@@ -1,0 +1,106 @@
+pipeline {
+    agent any
+    environment {
+        KUBECONFIG = '/home/njl/.kube/config'
+    }
+
+    stages {
+        stage('Fetch kubeconfig from remote server') {
+            steps {
+                withCredentials([sshUserPrivateKey(credentialsId: 'remote-server-ssh-key', keyFileVariable: 'SSH_KEY')]) {
+                    script {
+                        sh """
+                            scp -i $SSH_KEY -o StrictHostKeyChecking=no njl@172.16.60.42:/home/njl/.kube/config /tmp/kubeconfig
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Clone Git Repo') {
+            steps {
+                git url: 'https://github.com/njl010/DEVOPS-project-003.git', branch: 'main'
+            }
+        }
+
+        stage('Build Docker Images') {
+            steps {
+                script {
+                    sh 'docker build -f payment-svc/dockerfile -t njl010docker/payment:latest payment-svc/'
+                }
+            }
+        }
+
+        stage('Login to Docker Hub') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'githubcredentials', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
+                    script {
+                        sh 'echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin'
+                    }
+                }
+            }
+        }
+
+        stage('Tag and Push Docker Images') {
+            steps {
+                script {
+                    sh 'docker push njl010docker/payment:latest'
+                }
+            }
+        }
+
+        stage('Deploy to Blue Environment (Payment Service)') {
+            steps {
+                script {
+                    sh 'kubectl apply -f payment-svc/deployment-blue.yml'
+                    sh 'kubectl apply -f payment-svc/service-blue.yml'
+                }
+            }
+        }
+
+        stage('Deploy to Green Environment (Payment Service)') {
+            steps {
+                script {
+                    sh 'kubectl apply -f payment-svc/deployment-green.yml'
+                    sh 'kubectl apply -f payment-svc/service-green.yml'
+                }
+            }
+        }
+
+        stage('Switch Traffic to Green (Payment Service)') {
+            steps {
+                script {
+                    sh 'kubectl apply -f payment-svc/service-green-traffic.yml'
+                }
+            }
+        }
+
+        stage('Monitor Green Deployment (Payment Service)') {
+            steps {
+                script {
+                    echo 'Monitoring Green payment service deployment...'
+                    sh 'kubectl get pods --selector=env=green'
+                    sh 'kubectl get deployments --selector=env=green'
+                }
+            }
+        }
+
+        stage('Decommission Blue Environment (Payment Service)') {
+            steps {
+                script {
+                    sh 'kubectl scale deployment payment-service-blue --replicas=0'
+                }
+            }
+        }
+
+        stage('Clean Up') {
+            steps {
+                script {
+                    echo 'Cleaning up resources...'
+                    sh 'kubectl delete -f payment-svc/deployment-blue.yml'
+                    sh 'kubectl delete -f payment-svc/service-blue.yml'
+                }
+            }
+        }
+    }
+}
