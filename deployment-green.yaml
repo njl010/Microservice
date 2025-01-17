@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payment-service-green
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: payment
+      env: green  # Green environment label
+  template:
+    metadata:
+      labels:
+        app: payment
+        env: green  # Green environment label
+    spec:
+      containers:
+      - name: payment-service
+        image: njl010docker/payment:v2  # Green version
+        ports:
+        - containerPort: 3000
