@@ -19,7 +19,7 @@ pipeline {
 
         stage('Clone Git Repo') {
             steps {
-                git url: 'https://github.com/njl010/DEVOPS-project-003.git', branch: 'main'
+                git url: 'https://github.com/njl010/Microservice.git', branch: 'main'
             }
         }
 
